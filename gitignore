@@ -1,0 +1,29 @@
+# Environnement virtuel
+venv/
+env/
+*.venv
+
+# Secrets — NE JAMAIS PUBLIER
+.env
+*.env
+config/secrets.py
+
+# Base de données (contient des données collectées, pas du code)
+*.db
+*.sqlite
+*.sqlite3
+iocs.db
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+
+# OS / éditeurs
+.DS_Store
+.vscode/
+.idea/
