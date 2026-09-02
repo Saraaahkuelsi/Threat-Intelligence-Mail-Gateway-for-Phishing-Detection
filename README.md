@@ -117,10 +117,3 @@ Projet en cours de développement (stage/projet académique). Prochaines étapes
 - Tracking CVE (NVD, CISA KEV, EPSS)
 - Filtrage par contexte (secteur, TLP, type de menace)
 
-## Licence
-
-À définir.
-
-## Avertissement
-
-Ce projet est à but éducatif / démonstratif. Les IOC collectés proviennent de sources publiques et doivent être validés avant tout usage opérationnel (blocage automatique, etc.).
