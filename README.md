@@ -1,54 +1,68 @@
-# CTI Platform
+# CTI-Powered Phishing Detection Gateway
 
-Plateforme de Cyber Threat Intelligence (CTI) construite à partir de sources publiques, avec normalisation, scoring de fraîcheur (decay), et export des indicateurs de compromission (IOC).
+Open-source CTI platform aggregating IOCs from public feeds (URLhaus, ThreatFox, OTX, OpenPhish, Feodo Tracker), with normalization, MISP-inspired decay scoring, STIX/CSV export, and a mail gateway that scans incoming emails and blocks any message containing a known malicious IOC.
 
-## Objectifs
+## Objectives
 
-- Collecter des IOC depuis plusieurs sources CTI publiques
-- Normaliser les données dans un schéma commun
-- Gérer le cycle de vie des IOC via un système de score dégressif (inspiré de MISP / OpenCTI), plutôt qu'un TTL fixe
-- Exporter les IOC actifs (STIX 2.1 / CSV) pour intégration dans d'autres outils (ex: pare-feu pfSense)
+This project aims to build a functional and reliable CTI platform. The approach is structured around the following key steps:
 
-## Sources intégrées
+- Set up an automated IOC collection system from multiple public Cyber Threat Intelligence sources
+- Design a database to centralize IOCs, their history, their sources, and associated malware profiles
+- Correlate information from different sources to improve the reliability of collected intelligence
+- Enrich IOCs with contextual information (malware profiles, MITRE ATT&CK techniques, CVEs, confidence score, decay score, etc.)
+- Develop a REST API to query IOCs, their context, and related IOCs
+- Integrate an on-demand external verification via VirusTotal to complement internal intelligence when it is insufficient
+- Develop a visualization interface to facilitate the analysis and use of CTI intelligence
+- Integrate the platform with a Secure Email Gateway (Haraka) to enable real-time analysis of IOCs extracted from emails and support decision-making (accept, quarantine, or reject messages)
 
-| Source | Type de données | Authentification |
-|---|---|---|
-| [URLhaus](https://urlhaus.abuse.ch/) | URLs malveillantes | Auth-Key (abuse.ch) |
-| [ThreatFox](https://threatfox.abuse.ch/) | IOC multi-types + score de confiance | Auth-Key (abuse.ch) |
-| [Feodo Tracker](https://feodotracker.abuse.ch/) | Serveurs C2 de botnets | Auth-Key (abuse.ch) |
-| [AlienVault OTX](https://otx.alienvault.com/) | Pulses (rapports de campagne) + IOC | Clé API (SDK OTXv2) |
-| [OpenPhish](https://openphish.com/) | URLs de phishing | Aucune (flux public) |
+## Sources
+
+| Source                                          | Data type                          | Authentication      |
+| ----------------------------------------------- | ---------------------------------- | ------------------- |
+| [URLhaus](https://urlhaus.abuse.ch/)            | Malicious URLs                     | Auth-Key (abuse.ch) |
+| [ThreatFox](https://threatfox.abuse.ch/)        | Multi-type IOCs + confidence score | Auth-Key (abuse.ch) |
+| [Feodo Tracker](https://feodotracker.abuse.ch/) | Botnet C2 servers                  | Auth-Key (abuse.ch) |
+| [AlienVault OTX](https://otx.alienvault.com/)   | Pulses (campaign reports) + IOCs   | API key (OTXv2 SDK) |
+| [OpenPhish](https://openphish.com/)             | Phishing URLs                      | None (public feed)  |
+| [VirusTotal](https://www.virustotal.com/)       | On-demand verification             | API key             |
 
 ## Architecture
 
+![Platform architecture](architecure_cti.png)
+
 ```
-Sources CTI publiques
+Public CTI sources
         │
         ▼
-Scripts de collecte (Python)
-   - normalisation
-   - upsert en base
+Collection scripts (Python)
+   - normalization
+   - upsert into database
         │
         ▼
-Base de données (SQLite)
+Database (SQLite)
         │
         ▼
-Moteur de scoring / decay
-   - formule inspirée de MISP
+Scoring / decay engine
+   - MISP-inspired formula
    - score(t) = base_score × (1 − (t/lifetime)^(1/decay_speed))
         │
         ▼
-Export (STIX 2.1 / CSV)
+REST API + visualization interface
         │
         ▼
-Consommateurs (ex: pfSense via alias / pfBlockerNG)
+Export (STIX 2.1 / CSV)  ──────────────►  Consumers (e.g. pfSense via alias / pfBlockerNG)
+        │
+        ▼
+Secure Email Gateway (Haraka)
+   - real-time IOC scan of incoming emails
+   - accept / quarantine / reject decision
 ```
 
 ## Installation
 
 ```bash
-git clone https://github.com/<ton-utilisateur>/cti-platform.git
-cd cti-platform
+git clone https://github.com/<your-username>/cti-phishing-gateway.git
+cd cti-phishing-gateway
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -56,24 +70,26 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Crée un fichier `.env` à la racine (non versionné) avec tes clés API :
+Create a `.env` file at the project root (not versioned) with your API keys:
 
 ```
-URLHAUS_AUTH_KEY=ta_cle
-THREATFOX_AUTH_KEY=ta_cle
-OTX_API_KEY=ta_cle
+URLHAUS_AUTH_KEY=your_key
+THREATFOX_AUTH_KEY=your_key
+OTX_API_KEY=your_key
+VIRUSTOTAL_API_KEY=your_key
 ```
 
-- Clé abuse.ch (URLhaus / ThreatFox / Feodo Tracker) : à générer sur https://auth.abuse.ch/
-- Clé OTX : à générer sur https://otx.alienvault.com/settings
+- abuse.ch key (URLhaus / ThreatFox / Feodo Tracker): generate at https://auth.abuse.ch/
+- OTX key: generate at https://otx.alienvault.com/settings
+- VirusTotal key: generate at https://www.virustotal.com/gui/my-apikey
 
-## Initialisation de la base
+## Database initialization
 
 ```bash
 python init_db.py
 ```
 
-## Collecte des IOC
+## IOC collection
 
 ```bash
 python collect_urlhaus.py
@@ -83,44 +99,32 @@ python collect_otx.py
 python collect_openPhish.py
 ```
 
-## Mise à jour des scores (decay)
+## Score update (decay)
 
 ```bash
 python update_scores.py --db iocs.db
 ```
 
-## Modèle de scoring
+## Scoring model
 
-Chaque IOC reçoit un score initial (`base_score`), issu soit de la confiance native de la source (ex: `confidence_level` de ThreatFox), soit d'une valeur par défaut selon son type. Ce score décroît dans le temps selon une formule inspirée du modèle de decay de MISP, jusqu'à un seuil en dessous duquel l'IOC est considéré comme expiré (`is_active = 0`). Un nouveau "sighting" (ré-observation dans un flux) réinitialise le score.
+Each IOC receives an initial score (`base_score`), either from the source's native confidence (e.g. ThreatFox's `confidence_level`) or from a default value based on its type. This score decays over time following a MISP-inspired formula, until it falls below a threshold at which the IOC is considered expired (`is_active = 0`). A new sighting (re-observed in a feed) resets the score.
 
-| Type | Durée de vie (lifetime) | Seuil d'expiration |
-|---|---|---|
-| IP | 3 jours | 30 |
-| URL | 5 jours | 30 |
-| Domaine | 30 jours | 30 |
-| Hash (MD5/SHA1/SHA256) | 3650 jours | 5 |
+| Type                   | Lifetime  | Expiration threshold |
+| ---------------------- | --------- | -------------------- |
+| IP                     | 3 days    | 30                   |
+| URL                    | 5 days    | 30                   |
+| Domain                 | 30 days   | 30                   |
+| Hash (MD5/SHA1/SHA256) | 3650 days | 5                    |
 
-## Automatisation (cron)
+## Automation (cron)
 
 ```bash
-0 * * * * cd /chemin/vers/cti-platform && venv/bin/python collect_urlhaus.py
-15 * * * * cd /chemin/vers/cti-platform && venv/bin/python collect_threat.py
-30 * * * * cd /chemin/vers/cti-platform && venv/bin/python collect_otx.py
-45 * * * * cd /chemin/vers/cti-platform && venv/bin/python update_scores.py
+0 * * * * cd /path/to/cti-phishing-gateway && venv/bin/python collect_urlhaus.py
+15 * * * * cd /path/to/cti-phishing-gateway && venv/bin/python collect_threat.py
+30 * * * * cd /path/to/cti-phishing-gateway && venv/bin/python collect_otx.py
+45 * * * * cd /path/to/cti-phishing-gateway && venv/bin/python update_scores.py
 ```
 
-## État du projet
+## Mail gateway integration (Haraka)
 
-Projet en cours de développement (stage/projet académique). Prochaines étapes :
-- Normalisation complète vers STIX 2.1
-- Export CSV/texte pour intégration pfSense
-- Tracking CVE (NVD, CISA KEV, EPSS)
-- Filtrage par contexte (secteur, TLP, type de menace)
-
-## Licence
-
-À définir.
-
-## Avertissement
-
-Ce projet est à but éducatif / démonstratif. Les IOC collectés proviennent de sources publiques et doivent être validés avant tout usage opérationnel (blocage automatique, etc.).
+The platform integrates with a **Haraka** Secure Email Gateway. Incoming emails are scanned in real time: URLs, domains, IPs, and hashes extracted from message content and attachments are checked against the IOC database. Based on the match and its current decay score, the gateway decides to accept, quarantine, or reject the message.
