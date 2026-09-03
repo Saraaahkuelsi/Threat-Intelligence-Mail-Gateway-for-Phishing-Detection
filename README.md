@@ -28,7 +28,7 @@ This project aims to build a functional and reliable CTI platform. The approach 
 
 ## Architecture
 
-![Platform architecture](architecure_cti.png)
+![Platform architecture](archi.png)
 
 ```
 Public CTI sources
@@ -127,3 +127,54 @@ Each IOC receives an initial score (`base_score`), either from the source's nati
 
 ## Mail gateway integration (Haraka)
 
+The platform integrates with a **Haraka** Secure Email Gateway. Incoming emails are scanned in real time: URLs, domains, IPs, and hashes extracted from message content and attachments are checked against the IOC database. Based on the match and its current decay score, the gateway decides to accept, quarantine, or reject the message.
+
+### Installation
+
+Haraka requires Node.js. Install it globally via npm:
+
+```bash
+npm install -g Haraka
+```
+
+Create a new Haraka instance dedicated to this project:
+
+```bash
+haraka -i /path/to/haraka-instance
+cd /path/to/haraka-instance
+```
+
+### Configuration
+
+Enable the custom plugin that queries the CTI platform's IOC database. Add it to the plugin list:
+
+```bash
+echo "cti_ioc_check" >> config/plugins
+```
+
+Place the plugin file (`cti_ioc_check.js`) in the `plugins/` directory of your Haraka instance. It should call the platform's REST API to check each extracted IOC (URL, domain, IP, hash) against the database, and use the returned decay score/confidence to decide whether to accept, quarantine, or reject the message.
+
+Set the CTI platform API endpoint and any required credentials in `config/cti_ioc_check.ini`:
+
+```ini
+[api]
+base_url=http://localhost:5000/api
+api_key=your_internal_api_key
+
+[thresholds]
+reject_score=70
+quarantine_score=30
+```
+
+### Running the gateway
+
+```bash
+haraka -c /path/to/haraka-instance
+```
+
+By default, Haraka listens on port 25 (SMTP). Adjust `config/smtp.ini` if you need a different port or TLS configuration.
+
+### Notes
+
+- Make sure the CTI platform's REST API (and its database) is running and reachable before starting Haraka, since IOC lookups happen synchronously during the SMTP transaction.
+- Test the integration with a known malicious IOC (e.g. from URLhaus) embedded in a test email to confirm the gateway correctly quarantines or rejects it.
