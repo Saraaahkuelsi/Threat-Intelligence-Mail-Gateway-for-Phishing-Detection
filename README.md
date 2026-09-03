@@ -127,4 +127,3 @@ Each IOC receives an initial score (`base_score`), either from the source's nati
 
 ## Mail gateway integration (Haraka)
 
-The platform integrates with a **Haraka** Secure Email Gateway. Incoming emails are scanned in real time: URLs, domains, IPs, and hashes extracted from message content and attachments are checked against the IOC database. Based on the match and its current decay score, the gateway decides to accept, quarantine, or reject the message.
