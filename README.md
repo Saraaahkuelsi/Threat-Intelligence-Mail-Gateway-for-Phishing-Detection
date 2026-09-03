@@ -28,7 +28,7 @@ This project aims to build a functional and reliable CTI platform. The approach 
 
 ## Architecture
 
-![Platform architecture](archi.png)
+![Platform architecture](archi.PNG)
 
 ```
 Public CTI sources
